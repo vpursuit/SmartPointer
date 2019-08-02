@@ -32,5 +32,3 @@ The main.cpp contains several test:
 See the private method void Pointer::updateRefContainer(T *t, int arraySize);
 - For better testability I also added a public function to Pointer to read out the refCount. This method adds no new functionality, but makes it possible to make asertions in test code. 
 
-
-
