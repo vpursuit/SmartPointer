@@ -25,6 +25,7 @@ private:
         to an allocated array. It is false
         otherwise.
     */
+
     bool isArray;
     // true if pointing to array
     // If this Pointer is pointing to an allocated
@@ -33,12 +34,6 @@ private:
     static bool first; // true when first Pointer is created
     // Return an iterator to pointer details in refContainer.
     typename std::list<PtrDetails<T> >::iterator findPtrInfo(T *ptr);
-
-    //
-    // If t points to heap, this will update the refContainer.
-    // If refContainer already contains a PtrDetail instance, the refcount will be
-    // increased. Otherwise a new PtrDetail object with refCount = 1 will be created.
-    void updateRefContainer(T *t, int arraySize);
 
 public:
     // Define an iterator type for Pointer<T>.
@@ -126,23 +121,6 @@ template<class T, int size>
 bool Pointer<T, size>::first = true;
 
 template<class T, int size>
-void Pointer<T, size>::updateRefContainer(T *t, int arraySize) {
-    if (t) { // if t is not NULL or nullptr or 0
-        typename std::list<PtrDetails<T> >::iterator p;
-        p = findPtrInfo(t);
-        if (p != refContainer.end()) {
-            // there is already a pointer to that address
-            p->refcount++;
-        } else {
-            // no reference found, so add new PtrDetail object
-            PtrDetails<T> ptrDtls = PtrDetails<T>(t, arraySize);
-            ptrDtls.refcount++; // a very first reference does now exist
-            refContainer.push_back(ptrDtls);
-        }
-    }
-}
-
-template<class T, int size>
 int Pointer<T, size>::getRefCount() {
     int result = 0;
     typename std::list<PtrDetails<T> >::iterator p;
@@ -160,31 +138,32 @@ Pointer<T, size>::Pointer(T *t): addr(t), isArray(size > 0), arraySize(size) {
     if (first)
         atexit(shutdown);
     first = false;
-    updateRefContainer(t, size);
+    typename std::list<PtrDetails<T> >::iterator p;
+    p = findPtrInfo(t);
+    if (p != refContainer.end()) {
+        p->refcount++;
+    } else {
+        PtrDetails<T> gcObj(t, size);
+        gcObj.refcount = 1;
+        refContainer.push_front(gcObj);
+    }
 }
 
 // Copy constructor.
 template<class T, int size>
 Pointer<T, size>::Pointer(const Pointer &ob): addr(ob.addr), isArray(ob.isArray), arraySize(ob.arraySize) {
-    updateRefContainer(ob.addr, ob.arraySize);
+    typename std::list<PtrDetails<T> >::iterator p;
+    p = findPtrInfo(ob.addr);
+    p->refcount++;
 }
 
 // Destructor for Pointer.
 template<class T, int size>
 Pointer<T, size>::~Pointer() {
-
     typename std::list<PtrDetails<T> >::iterator p;
     p = findPtrInfo(addr);
-
-    if (p != refContainer.end()) {
-        p->refcount--;
-        // decrement ref count
-        // Collect garbage when a pointer goes out of scope.
-        collect();
-    }
-    // For real use, you might want to collect unused memory less frequently,
-    // such as after refContainer has reached a certain size, after a certain number of Pointers have gone out of scope,
-    // or when memory is low.
+    if (p->refcount) p->refcount--;
+    collect();
 }
 
 // Collect garbage. Returns true if at least
@@ -228,13 +207,16 @@ T *Pointer<T, size>::operator=(T *t) {
     // destroy the actual left hand value (lhv)
     typename std::list<PtrDetails<T> >::iterator p;
     p = findPtrInfo(addr);
-    if (p != refContainer.end()) {
-        p->refcount--;
-        // decrement ref count
-        // Collect garbage when a pointer goes out of scope.
-        collect();
+    p->refcount--;
+
+    p = findPtrInfo(t);
+    if (p != refContainer.end())
+        p->refcount++;
+    else {
+        PtrDetails<T> gcObj(t, size);
+        gcObj.refcount = 1;
+        refContainer.push_front(gcObj);
     }
-    updateRefContainer(t, size);
 
     // initialize lhv with rhv
     arraySize = size;
@@ -254,20 +236,17 @@ Pointer<T, size> &Pointer<T, size>::operator=(Pointer &rv) {
     // destroy lhv
     typename std::list<PtrDetails<T> >::iterator p;
     p = findPtrInfo(addr);
-    if (p != refContainer.end()) {
-        p->refcount--;
-        // decrement ref count
-        // Collect garbage when a pointer goes out of scope.
-        collect();
-    }
-    updateRefContainer(rv.addr, size);
+    p->refcount--;
+
+    p = findPtrInfo(rv.addr);
+    p->refcount++;
 
     // initialize with rhv
-    arraySize = rv.arraySize;
-    isArray = (arraySize > 0);
     addr = rv.addr;
+    arraySize = rv.arraySize;
+    isArray = (arraySize);
 
-    return *this;
+    return rv;
 }
 
 // A utility function that displays refContainer.

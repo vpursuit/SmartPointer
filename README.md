@@ -20,6 +20,11 @@ g++ main.cpp -std=c++17 -Wall
 
 The main.cpp contains several test:
 
+#### doubleLinkedListTest:
+function to test Pointer with a simple double linked list.
+
+## unitTest:
+Ttest the following aspects of Pointer:
 - 1-3: constructors
 - 4: self-assignment
 - 5-6: assignment with/without initialized left hand side
